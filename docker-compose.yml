@@ -26,7 +26,7 @@ services:
     build: ./backend
     container_name: biosenales-backend
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       DATABASE_URL: postgresql://admin:admin123@db:5432/biosenales_db
       FLASK_ENV: development
