@@ -8,4 +8,4 @@ Proyecto orientado a la monitorización del estado fisiológico de los usuarios 
 - Registro de eventos
 
 ## Objetivo
-Servir como base para aplicar conceptos de contenedores, métricas, logs y observabilidad.
+Servir como base para aplicar conceptos de contenedores, métricas, logs y observabilidad..
