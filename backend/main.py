@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request
 from datetime import datetime
 import os
-from prometheus_client import Counter, Histogram, generate_latest
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 import time
 import logging
 
@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 # Métricas Prometheus
 request_count = Counter('api_requests_total', 'Total de requests', ['method', 'endpoint'])
 request_duration = Histogram('api_request_duration_seconds', 'Duración de requests')
+stress_events = Counter('stress_events_total', 'Total de eventos de estrés', ['level'])
 
-# Simular BD en memoria (después usaremos PostgreSQL)
+# Simular BD en memoria
 users_db = {
     "1": {"id": "1", "name": "Juan", "heart_rate_baseline": 70},
     "2": {"id": "2", "name": "María", "heart_rate_baseline": 65}
@@ -62,9 +63,8 @@ def post_biosignal():
         "heart_rate": data.get("heart_rate"),
         "timestamp": datetime.now().isoformat()
     }
-    biosignals_db.append(biosignal)
     
-    # Detectar estrés simple
+    # Detectar estrés
     user = users_db.get(data.get("user_id"))
     if user:
         baseline = user["heart_rate_baseline"]
@@ -80,8 +80,10 @@ def post_biosignal():
             stress_level = 0
         
         biosignal["stress_level"] = stress_level
+        stress_events.labels(level=stress_level).inc()
         logger.info(f"Estrés detectado: nivel {stress_level}")
     
+    biosignals_db.append(biosignal)
     return jsonify(biosignal), 201
 
 # ✅ ENDPOINT 4: Obtener bioseñales del usuario
@@ -91,10 +93,11 @@ def get_biosignals(user_id):
     signals = [b for b in biosignals_db if str(b["user_id"]) == user_id]
     return jsonify(signals)
 
-# ✅ ENDPOINT 5: Métricas para Prometheus
+# ✅ ENDPOINT 5: Métricas para Prometheus (FORMATO CORRECTO)
 @app.route('/metrics', methods=['GET'])
 def metrics():
-    return generate_latest()
+    logger.info("Endpoint /metrics solicitado")
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
 
 # ✅ ENDPOINT 6: Listar todos los usuarios
 @app.route('/users', methods=['GET'])

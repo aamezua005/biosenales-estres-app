@@ -24,7 +24,6 @@ services:
     ports:
       - "5001:5000"
     environment:
-      DATABASE_URL: postgresql://admin:admin123@db:5432/biosenales_db
       FLASK_ENV: development
     depends_on:
       db:
@@ -40,13 +39,11 @@ services:
     container_name: biosenales-frontend
     ports:
       - "3000:3000"
-    environment:
-      REACT_APP_API_URL: http://backend:5000
-    depends_on:
-      - backend
     networks:
       - biosenales-net
     restart: unless-stopped
+    depends_on:
+      - backend
 
   prometheus:
     image: prom/prometheus:latest
@@ -74,31 +71,6 @@ services:
     restart: unless-stopped
     depends_on:
       - prometheus
-
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
-    container_name: biosenales-elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-    ports:
-      - "9200:9200"
-    networks:
-      - biosenales-net
-    restart: unless-stopped
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:7.14.0
-    container_name: biosenales-kibana
-    ports:
-      - "5601:5601"
-    environment:
-      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
-    networks:
-      - biosenales-net
-    restart: unless-stopped
-    depends_on:
-      - elasticsearch
 
 volumes:
   db_data:
