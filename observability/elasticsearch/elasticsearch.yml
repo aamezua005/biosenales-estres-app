@@ -1,0 +1,3 @@
+cluster.name: biosenales-cluster
+discovery.type: single-node
+xpack.security.enabled: false
