@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # 🗄️ BASE DE DATOS
+  db:
+    image: postgres:15-alpine
+    container_name: biosenales-db
+    environment:
+      POSTGRES_DB: biosenales_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - biosenales-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 🔙 BACKEND API
+  backend:
+    build: ./backend
+    container_name: biosenales-backend
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://admin:admin123@db:5432/biosenales_db
+      FLASK_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - biosenales-net
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+  # 🎨 FRONTEND
+  frontend:
+    build: ./frontend
+    container_name: biosenales-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://backend:5000
+    depends_on:
+      - backend
+    networks:
+      - biosenales-net
+    restart: unless-stopped
+
+volumes:
+  db_data:
+
+networks:
+  biosenales-net:
+    driver: bridge
