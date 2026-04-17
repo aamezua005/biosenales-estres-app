@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
+//arene 
 function App() {
   const [heartRate, setHeartRate] = useState(null);
   const [stressLevel, setStressLevel] = useState(null);
