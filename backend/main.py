@@ -4,12 +4,31 @@ import os
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 import time
 import logging
+import socket
 
 app = Flask(__name__)
 
 # Configurar logging
+class LogstashHandler(logging.Handler):
+    def emit(self, record):
+        log_entry = self.format(record)
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(("logstash", 5000))
+            sock.sendall((log_entry + "\n").encode("utf-8"))
+            sock.close()
+        except Exception:
+            pass
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+logstash_handler = LogstashHandler()
+logstash_handler.setLevel(logging.INFO)
+logstash_formatter = logging.Formatter('{"message": "%(message)s", "level": "%(levelname)s"}')
+logstash_handler.setFormatter(logstash_formatter)
+
+logger.addHandler(logstash_handler)
 
 # Métricas Prometheus
 request_count = Counter('api_requests_total', 'Total de requests', ['method', 'endpoint'])
