@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import os
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -7,6 +8,34 @@ import logging
 import socket
 
 app = Flask(__name__)
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    return response
+
+# Configuración PostgreSQL
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://admin:admin123@db:5432/biosenales_db"
+)
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+db = SQLAlchemy(app)
+
+# Modelos de BD
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    heart_rate_baseline = db.Column(db.Float, nullable=False)
+
+class Biosignal(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    heart_rate = db.Column(db.Float, nullable=False)
+    stress_level = db.Column(db.Integer, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 # Configurar logging
 class LogstashHandler(logging.Handler):
@@ -27,21 +56,21 @@ logstash_handler = LogstashHandler()
 logstash_handler.setLevel(logging.INFO)
 logstash_formatter = logging.Formatter('{"message": "%(message)s", "level": "%(levelname)s"}')
 logstash_handler.setFormatter(logstash_formatter)
-
 logger.addHandler(logstash_handler)
 
 # Métricas Prometheus
-request_count = Counter('api_requests_total', 'Total de requests', ['method', 'endpoint'])
-request_duration = Histogram('api_request_duration_seconds', 'Duración de requests')
-stress_events = Counter('stress_events_total', 'Total de eventos de estrés', ['level'])
+request_count = Counter("api_requests_total", "Total de requests", ["method", "endpoint"])
+request_duration = Histogram("api_request_duration_seconds", "Duración de requests")
+stress_events = Counter("stress_events_total", "Total de eventos de estrés", ["level"])
 
-# Simular BD en memoria
-users_db = {
-    "1": {"id": "1", "name": "Juan", "heart_rate_baseline": 70},
-    "2": {"id": "2", "name": "María", "heart_rate_baseline": 65}
-}
+# Crear tablas y usuarios iniciales
+with app.app_context():
+    db.create_all()
 
-biosignals_db = []
+    if User.query.count() == 0:
+        db.session.add(User(name="Juan", heart_rate_baseline=70))
+        db.session.add(User(name="María", heart_rate_baseline=65))
+        db.session.commit()
 
 @app.before_request
 def start_timer():
@@ -54,76 +83,133 @@ def log_metrics(response):
     request_duration.observe(duration)
     return response
 
-# ✅ ENDPOINT 1: Health check
-@app.route('/health', methods=['GET'])
+def calculate_stress_level(heart_rate, baseline):
+    if heart_rate > baseline * 1.6:
+        return 3
+    elif heart_rate > baseline * 1.4:
+        return 2
+    elif heart_rate > baseline * 1.2:
+        return 1
+    else:
+        return 0
+
+# ENDPOINT 1: Health check
+@app.route("/health", methods=["GET"])
 def health():
     logger.info("Health check llamado")
     return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
 
-# ✅ ENDPOINT 2: Obtener usuario
-@app.route('/users/<user_id>', methods=['GET'])
+# ENDPOINT 2: Obtener usuario
+@app.route("/users/<int:user_id>", methods=["GET"])
 def get_user(user_id):
     logger.info(f"Obteniendo usuario {user_id}")
-    user = users_db.get(user_id)
+
+    user = User.query.get(user_id)
+
     if not user:
         logger.warning(f"Usuario {user_id} no encontrado")
         return jsonify({"error": "Usuario no encontrado"}), 404
-    return jsonify(user)
 
-# ✅ ENDPOINT 3: Registrar bioseñal (frecuencia cardíaca)
-@app.route('/biosignals', methods=['POST'])
+    return jsonify({
+        "id": user.id,
+        "name": user.name,
+        "heart_rate_baseline": user.heart_rate_baseline
+    })
+
+# ENDPOINT 3: Registrar bioseñal
+@app.route("/biosignals", methods=["POST"])
 def post_biosignal():
-    data = request.json
-    logger.info(f"Registrando bioseñal para usuario {data.get('user_id')}")
-    
-    biosignal = {
-        "id": len(biosignals_db) + 1,
-        "user_id": data.get("user_id"),
-        "heart_rate": data.get("heart_rate"),
-        "timestamp": datetime.now().isoformat()
-    }
-    
-    # Detectar estrés
-    user = users_db.get(data.get("user_id"))
-    if user:
-        baseline = user["heart_rate_baseline"]
-        hr = data.get("heart_rate")
-        
-        if hr > baseline * 1.6:
-            stress_level = 3
-        elif hr > baseline * 1.4:
-            stress_level = 2
-        elif hr > baseline * 1.2:
-            stress_level = 1
-        else:
-            stress_level = 0
-        
-        biosignal["stress_level"] = stress_level
-        stress_events.labels(level=stress_level).inc()
-        logger.info(f"Estrés detectado: nivel {stress_level}")
-    
-    biosignals_db.append(biosignal)
-    return jsonify(biosignal), 201
+    data = request.json or {}
 
-# ✅ ENDPOINT 4: Obtener bioseñales del usuario
-@app.route('/biosignals/<user_id>', methods=['GET'])
+    user_id = data.get("user_id")
+    heart_rate = data.get("heart_rate")
+
+    logger.info(f"Registrando bioseñal para usuario {user_id}")
+
+    if user_id is None or heart_rate is None:
+        return jsonify({"error": "Faltan user_id o heart_rate"}), 400
+
+    try:
+        user_id = int(user_id)
+        heart_rate = float(heart_rate)
+    except ValueError:
+        return jsonify({"error": "user_id y heart_rate deben ser numéricos"}), 400
+
+    if heart_rate < 30 or heart_rate > 220:
+        return jsonify({"error": "heart_rate fuera de rango"}), 400
+
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    stress_level = calculate_stress_level(heart_rate, user.heart_rate_baseline)
+
+    biosignal = Biosignal(
+        user_id=user.id,
+        heart_rate=heart_rate,
+        stress_level=stress_level
+    )
+
+    db.session.add(biosignal)
+    db.session.commit()
+
+    stress_events.labels(level=str(stress_level)).inc()
+    logger.info(f"Estrés detectado: nivel {stress_level}")
+
+    return jsonify({
+        "id": biosignal.id,
+        "user_id": biosignal.user_id,
+        "heart_rate": biosignal.heart_rate,
+        "stress_level": biosignal.stress_level,
+        "timestamp": biosignal.timestamp.isoformat()
+    }), 201
+
+# ENDPOINT 4: Obtener bioseñales del usuario
+@app.route("/biosignals/<int:user_id>", methods=["GET"])
 def get_biosignals(user_id):
     logger.info(f"Obteniendo bioseñales para usuario {user_id}")
-    signals = [b for b in biosignals_db if str(b["user_id"]) == user_id]
-    return jsonify(signals)
 
-# ✅ ENDPOINT 5: Métricas para Prometheus (FORMATO CORRECTO)
-@app.route('/metrics', methods=['GET'])
+    signals = (
+        Biosignal.query
+        .filter_by(user_id=user_id)
+        .order_by(Biosignal.timestamp.desc())
+        .all()
+    )
+
+    return jsonify([
+        {
+            "id": s.id,
+            "user_id": s.user_id,
+            "heart_rate": s.heart_rate,
+            "stress_level": s.stress_level,
+            "timestamp": s.timestamp.isoformat()
+        }
+        for s in signals
+    ])
+
+# ENDPOINT 5: Métricas para Prometheus
+@app.route("/metrics", methods=["GET"])
 def metrics():
     logger.info("Endpoint /metrics solicitado")
-    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+    return generate_latest(), 200, {"Content-Type": CONTENT_TYPE_LATEST}
 
-# ✅ ENDPOINT 6: Listar todos los usuarios
-@app.route('/users', methods=['GET'])
+# ENDPOINT 6: Listar todos los usuarios
+@app.route("/users", methods=["GET"])
 def list_users():
     logger.info("Listando usuarios")
-    return jsonify(list(users_db.values()))
 
-if __name__ == '__main__':
+    users = User.query.all()
+
+    return jsonify([
+        {
+            "id": u.id,
+            "name": u.name,
+            "heart_rate_baseline": u.heart_rate_baseline
+        }
+        for u in users
+    ])
+
+if __name__ == "__main__":
     logger.info("🚀 Backend iniciando en puerto 5000")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
