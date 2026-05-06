@@ -93,6 +93,16 @@ def calculate_stress_level(heart_rate, baseline):
     else:
         return 0
 
+def get_recommendation(stress_level):
+    if stress_level == 0:
+        return "Estado normal. Mantén una respiración tranquila."
+    elif stress_level == 1:
+        return "Estrés leve. Respira profundamente durante unos segundos."
+    elif stress_level == 2:
+        return "Estrés moderado. Haz una pausa breve y relaja el cuerpo."
+    else:
+        return "Estrés alto. Se recomienda detener la actividad y descansar."
+
 # ENDPOINT 1: Health check
 @app.route("/health", methods=["GET"])
 def health():
@@ -162,6 +172,7 @@ def post_biosignal():
         "user_id": biosignal.user_id,
         "heart_rate": biosignal.heart_rate,
         "stress_level": biosignal.stress_level,
+        "recommendation": get_recommendation(stress_level),
         "timestamp": biosignal.timestamp.isoformat()
     }), 201
 
@@ -187,6 +198,43 @@ def get_biosignals(user_id):
         }
         for s in signals
     ])
+
+
+@app.route("/summary/<int:user_id>", methods=["GET"])
+def get_summary(user_id):
+
+    signals = Biosignal.query.filter_by(user_id=user_id).all()
+
+    if not signals:
+        return jsonify({
+            "total_readings": 0,
+            "average_heart_rate": 0,
+            "stress_events": 0,
+            "max_stress_level": 0,
+            "message": "No hay datos registrados todavía."
+        })
+
+    total_readings = len(signals)
+
+    average_heart_rate = (
+        sum(s.heart_rate for s in signals) / total_readings
+    )
+
+    stress_events_count = len([
+        s for s in signals if s.stress_level > 0
+    ])
+
+    max_stress_level = max(
+        s.stress_level for s in signals
+    )
+
+    return jsonify({
+        "total_readings": total_readings,
+        "average_heart_rate": round(average_heart_rate, 2),
+        "stress_events": stress_events_count,
+        "max_stress_level": max_stress_level,
+        "message": get_recommendation(max_stress_level)
+    })
 
 # ENDPOINT 5: Métricas para Prometheus
 @app.route("/metrics", methods=["GET"])
