@@ -6,6 +6,7 @@ from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_
 import time
 import logging
 import socket
+import random
 
 app = Flask(__name__)
 @app.after_request
@@ -33,8 +34,18 @@ class User(db.Model):
 class Biosignal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+
     heart_rate = db.Column(db.Float, nullable=False)
+    breathing_rate = db.Column(db.Float, nullable=False, default=14)
+    skin_temperature = db.Column(db.Float, nullable=False, default=36.5)
+    oxygen_saturation = db.Column(db.Float, nullable=False, default=98)
+
     stress_level = db.Column(db.Integer, nullable=False)
+    stress_score = db.Column(db.Float, nullable=False, default=0)
+
+    trend = db.Column(db.String(30), nullable=False, default="stable")
+    recommendation = db.Column(db.String(255), nullable=False, default="Estado normal.")
+
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 # Configurar logging
@@ -103,6 +114,45 @@ def get_recommendation(stress_level):
     else:
         return "Estrés alto. Se recomienda detener la actividad y descansar."
 
+def generate_biosignal(mode="normal"):
+    if mode == "normal":
+        return {
+            "heart_rate": random.randint(65, 80),
+            "breathing_rate": random.randint(12, 16),
+            "skin_temperature": round(random.uniform(36.3, 36.8), 1),
+            "oxygen_saturation": random.randint(97, 99)
+        }
+
+    elif mode == "stress":
+        return {
+            "heart_rate": random.randint(95, 125),
+            "breathing_rate": random.randint(20, 28),
+            "skin_temperature": round(random.uniform(37.0, 37.8), 1),
+            "oxygen_saturation": random.randint(93, 97)
+        }
+
+    elif mode == "recovery":
+        return {
+            "heart_rate": random.randint(75, 90),
+            "breathing_rate": random.randint(14, 18),
+            "skin_temperature": round(random.uniform(36.5, 37.0), 1),
+            "oxygen_saturation": random.randint(96, 99)
+        }
+
+    elif mode == "exercise":
+        return {
+            "heart_rate": random.randint(110, 150),
+            "breathing_rate": random.randint(24, 35),
+            "skin_temperature": round(random.uniform(37.2, 38.2), 1),
+            "oxygen_saturation": random.randint(95, 99)
+        }
+
+    return {
+        "heart_rate": 75,
+        "breathing_rate": 14,
+        "skin_temperature": 36.5,
+        "oxygen_saturation": 98
+    }
 # ENDPOINT 1: Health check
 @app.route("/health", methods=["GET"])
 def health():
@@ -234,6 +284,68 @@ def get_summary(user_id):
         "stress_events": stress_events_count,
         "max_stress_level": max_stress_level,
         "message": get_recommendation(max_stress_level)
+    })
+
+# ENDPOINT: Simulación fisiológica
+@app.route("/simulate", methods=["POST"])
+def simulate_biosignal():
+
+    data = request.json or {}
+
+    user_id = data.get("user_id")
+    mode = data.get("mode", "normal")
+
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+
+    generated = generate_biosignal(mode)
+
+    stress_level = calculate_stress_level(
+        generated["heart_rate"],
+        user.heart_rate_baseline
+    )
+
+    stress_score = min(
+        100,
+        round((generated["heart_rate"] / user.heart_rate_baseline) * 50)
+    )
+
+    if stress_score < 40:
+        trend = "stable"
+    elif stress_score < 70:
+        trend = "increasing"
+    else:
+        trend = "critical"
+
+    recommendation = get_recommendation(stress_level)
+
+    biosignal = Biosignal(
+        user_id=user.id,
+        heart_rate=generated["heart_rate"],
+        breathing_rate=generated["breathing_rate"],
+        skin_temperature=generated["skin_temperature"],
+        oxygen_saturation=generated["oxygen_saturation"],
+        stress_level=stress_level,
+        stress_score=stress_score,
+        trend=trend,
+        recommendation=recommendation
+    )
+
+    db.session.add(biosignal)
+    db.session.commit()
+
+    return jsonify({
+        "heart_rate": biosignal.heart_rate,
+        "breathing_rate": biosignal.breathing_rate,
+        "skin_temperature": biosignal.skin_temperature,
+        "oxygen_saturation": biosignal.oxygen_saturation,
+        "stress_level": biosignal.stress_level,
+        "stress_score": biosignal.stress_score,
+        "trend": biosignal.trend,
+        "recommendation": biosignal.recommendation,
+        "timestamp": biosignal.timestamp.isoformat()
     })
 
 # ENDPOINT 5: Métricas para Prometheus

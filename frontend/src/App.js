@@ -9,6 +9,7 @@ function App() {
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [userId, setUserId] = useState(1);
+    const [autoSimulation, setAutoSimulation] = useState(false);
 
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
@@ -19,7 +20,7 @@ function App() {
     const getStressColor = (level) => {
         switch (level) {
             case 0: return '#4CAF50';
-            case 1: return '#FFC107';
+            case 1: return '#8BC34A';
             case 2: return '#FF9800';
             case 3: return '#F44336';
             default: return '#9E9E9E';
@@ -41,21 +42,37 @@ function App() {
         fetchSummary();
     }, [userId]);
 
-    const generateAndFetchData = async () => {
-        try {
-            const newHeartRate = Math.floor(Math.random() * 40) + 70;
+    useEffect(() => {
+        if (!autoSimulation) return;
 
-            const response = await fetch(`${API_URL}/biosignals`, {
+        const modes = ["normal", "normal", "recovery", "stress", "stress", "stress", "recovery"];
+        let step = 0;
+
+        const interval = setInterval(() => {
+            const mode = modes[Math.min(step, modes.length - 1)];
+            generateAndFetchData(mode);
+            step++;
+        }, 2500);
+
+        return () => clearInterval(interval);
+    }, [autoSimulation, userId]);
+
+    const generateAndFetchData = async (mode = "normal") => {
+        try {
+
+            const response = await fetch(`${API_URL}/simulate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     user_id: userId,
-                    heart_rate: newHeartRate
+                    mode: mode
                 })
             });
 
             if (response.ok) {
+
                 const data = await response.json();
+
                 setHeartRate(data.heart_rate);
                 setStressLevel(data.stress_level || 0);
                 setRecommendation(data.recommendation || '');
@@ -63,31 +80,15 @@ function App() {
                 fetchBiosignals();
                 fetchSummary();
             }
+
         } catch (error) {
             console.error('Error:', error);
         }
     };
 
     const simulateStress = async () => {
-        const stressSequence = [75, 88, 102, 118];
 
-        for (const bpm of stressSequence) {
-            await fetch(`${API_URL}/biosignals`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: userId,
-                    heart_rate: bpm
-                })
-            });
-        }
-
-        fetchBiosignals();
-        fetchSummary();
-
-        setHeartRate(118);
-        setStressLevel(3);
-        setRecommendation('Estrés alto. Se recomienda detener la actividad y descansar.');
+        await generateAndFetchData("stress");
     };
 
     const fetchBiosignals = async () => {
@@ -197,8 +198,11 @@ function App() {
                         🔄 Obtener nueva medida
                     </button>
 
-                    <button className="btn-danger" onClick={simulateStress}>
-                        ⚠️ Simular estrés
+                    <button
+                        className={autoSimulation ? "btn-stop" : "btn-danger"}
+                        onClick={() => setAutoSimulation(!autoSimulation)}
+                    >
+                        {autoSimulation ? "⏸ Detener simulación" : "▶ Iniciar simulación"}
                     </button>
                 </div>
 
