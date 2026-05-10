@@ -353,13 +353,9 @@ tbody tr:hover {
 }
 
 .chart {
-  height: 180px;
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  border-left: 2px solid #ddd;
-  border-bottom: 2px solid #ddd;
-  padding: 10px;
   overflow-x: auto;
 }
 
@@ -368,12 +364,6 @@ tbody tr:hover {
   flex-direction: column;
   align-items: center;
   min-width: 45px;
-}
-
-.bar {
-  width: 30px;
-  border-radius: 8px 8px 0 0;
-  transition: all 0.3s ease;
 }
 
 .bar-container span {
@@ -409,18 +399,175 @@ tbody tr:hover {
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
 }
 
-.chart {
-    width: 100%;
-    height: 260px;
-    justify-content: space-around;
-}
-
-.bar-container {
-    flex: 1;
-    max-width: 80px;
-}
-
 .bar {
-    width: 45px;
+    width: 60px;
+    border-radius: 14px 14px 0 0;
+    transition: all 0.4s ease;
+}
+
+.bar:hover {
+    transform: scaleY(1.05);
+    opacity: 0.9;
+}
+
+/* Layout de producto con varias pantallas */
+.main-header {
+    max-width: 1400px;
+    margin: 0 auto 30px auto;
+    padding: 25px 30px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 30px;
+}
+
+.main-header h1 {
+    font-size: 2.6em;
+    margin-bottom: 8px;
+}
+
+.main-header p {
+    opacity: 0.9;
+    font-size: 1.1em;
+}
+
+.nav-menu {
+    display: flex;
+    gap: 12px;
+    background: rgba(255,255,255,0.15);
+    padding: 8px;
+    border-radius: 18px;
+}
+
+.nav-menu button {
+    border: none;
+    padding: 12px 20px;
+    border-radius: 14px;
+    cursor: pointer;
+    background: transparent;
+    color: white;
+    font-weight: bold;
+}
+
+.nav-menu button:hover,
+.nav-menu .nav-active {
+    background: white;
+    color: #667eea;
+}
+
+.home-page,
+.dashboard-page,
+.history-page {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.hero-card,
+.panel-card,
+.feature-card {
+    background: rgba(255,255,255,0.96);
+    border-radius: 24px;
+    padding: 35px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+
+.hero-card {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.hero-card h2 {
+    font-size: 2.5em;
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.hero-card p {
+    max-width: 750px;
+    margin: 0 auto 25px auto;
+    font-size: 1.15em;
+    color: #555;
+    line-height: 1.6;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 22px;
+}
+
+.feature-card h3 {
+    margin-bottom: 12px;
+    color: #333;
+}
+
+.feature-card p {
+    color: #666;
+    line-height: 1.5;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 25px;
+    margin-bottom: 25px;
+}
+
+.current-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.current-panel h2,
+.summary-panel h2,
+.chart-panel h2,
+.history-page h2 {
+    color: #333;
+    margin-bottom: 22px;
+}
+
+.chart-panel {
+    margin-top: 25px;
+}
+
+.chart-panel .chart {
+    width: 100%;
+    height: 420px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    gap: 20px;
+    padding: 25px;
+    border-left: 3px solid #ddd;
+    border-bottom: 3px solid #ddd;
+}
+
+.history-page {
+    margin-bottom: 40px;
+}
+
+.history-intro {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+.main-header {
+    flex-direction: column;
+    text-align: center;
+}
+
+.nav-menu {
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.features-grid,
+.dashboard-grid {
+    grid-template-columns: 1fr;
+}
 }
 
