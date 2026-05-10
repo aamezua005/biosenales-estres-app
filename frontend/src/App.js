@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import {
+    ResponsiveContainer,
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    Tooltip,
+    CartesianGrid,
+    Cell
+} from 'recharts';
 
 function App() {
     const [heartRate, setHeartRate] = useState(0);
@@ -268,20 +278,32 @@ function App() {
 
                     <section className="panel-card chart-panel">
                         <h2>📈 Evolución BPM</h2>
-                        <div className="chart">
-                            {[...biosignals].reverse().map((signal, index) => (
-                                <div key={index} className="bar-container">
-                                    <div
-                                        className="bar"
-                                        style={{
-                                            height: `${signal.heart_rate * 1.4}px`,
-                                            backgroundColor: getStressColor(signal.stress_level)
-                                        }}
-                                    ></div>
-                                    <span>{Math.round(signal.heart_rate)}</span>
-                                </div>
-                            ))}
-                        </div>
+                        <ResponsiveContainer width="100%" height={260}>
+                            <BarChart data={[...biosignals].reverse()}>
+
+                                <CartesianGrid stroke="rgba(0,0,0,0.08)" />
+
+                                <XAxis hide />
+
+                                <YAxis />
+
+                                <Tooltip />
+
+                                <Bar
+                                    dataKey="heart_rate"
+                                    radius={[12, 12, 0, 0]}
+                                    barSize={26}
+                                >
+                                    {[...biosignals].reverse().map((entry, index) => (
+                                        <Cell
+                                            key={`cell-${index}`}
+                                            fill={getStressColor(entry.stress_level)}
+                                        />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                        
                     </section>
                 </main>
             )}
